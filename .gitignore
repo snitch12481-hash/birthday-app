@@ -1,0 +1,14 @@
+# Зависимости
+node_modules/
+
+# База данных (если SQLite)
+*.sqlite
+*.db
+
+# Локальные настройки
+.env
+.DS_Store
+Thumbs.db
+
+# Логи
+npm-debug.log*
