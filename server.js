@@ -1,9 +1,8 @@
 // server.js
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
+const { Client } = require('pg');
 const cookieParser = require('cookie-parser');
 const path = require('path');
-const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,78 +14,78 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Database setup
-const dbPath = path.join(__dirname, 'birthday.db');
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) console.error('DB Error:', err);
-  else console.log('Connected to SQLite database');
+// PostgreSQL Client
+const client = new Client({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
+
+// Connect to DB
+client.connect()
+  .then(() => console.log('Connected to PostgreSQL'))
+  .catch(err => console.error('DB Connection Error:', err));
 
 // Initialize database
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS guests (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      first_name TEXT NOT NULL,
-      last_name TEXT NOT NULL,
-      foods TEXT,
-      drinks TEXT,
-      comments TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+async function initDB() {
+  try {
+    // Guests table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS guests (
+        id SERIAL PRIMARY KEY,
+        first_name TEXT NOT NULL,
+        last_name TEXT NOT NULL,
+        foods JSONB,
+        drinks JSONB,
+        comments TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
 
-  db.run(`
-    CREATE TABLE IF NOT EXISTS foods (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+    // Foods table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS foods (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
 
-  db.run(`
-    CREATE TABLE IF NOT EXISTS drinks (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+    // Drinks table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS drinks (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
 
-  // Insert default foods and drinks
-  db.get("SELECT COUNT(*) as count FROM foods", (err, row) => {
-    if (row.count === 0) {
+    // Insert default foods
+    const foodCount = await client.query("SELECT COUNT(*) FROM foods");
+    if (parseInt(foodCount.rows[0].count) === 0) {
       const defaultFoods = [
-        'Пицца',
-        'Салат',
-        'Паста',
-        'Суши',
-        'Блинчики',
-        'Торт',
-        'Фрукты'
+        'Пицца', 'Салат', 'Паста', 'Суши', 'Блинчики', 'Торт', 'Фрукты'
       ];
-      defaultFoods.forEach(food => {
-        db.run("INSERT INTO foods (name) VALUES (?)", [food]);
-      });
+      for (const food of defaultFoods) {
+        await client.query("INSERT INTO foods (name) VALUES ($1)", [food]);
+      }
     }
-  });
 
-  db.get("SELECT COUNT(*) as count FROM drinks", (err, row) => {
-    if (row.count === 0) {
+    // Insert default drinks
+    const drinkCount = await client.query("SELECT COUNT(*) FROM drinks");
+    if (parseInt(drinkCount.rows[0].count) === 0) {
       const defaultDrinks = [
-        'Сок',
-        'Вода',
-        'Газировка',
-        'Компот',
-        'Чай',
-        'Кофе',
-        'Молоко'
+        'Сок', 'Вода', 'Газировка', 'Компот', 'Чай', 'Кофе', 'Молоко'
       ];
-      defaultDrinks.forEach(drink => {
-        db.run("INSERT INTO drinks (name) VALUES (?)", [drink]);
-      });
+      for (const drink of defaultDrinks) {
+        await client.query("INSERT INTO drinks (name) VALUES ($1)", [drink]);
+      }
     }
-  });
-});
+  } catch (err) {
+    console.error('DB Init Error:', err);
+  }
+}
+
+initDB();
 
 // Helper function to generate session ID
 function generateSessionId() {
@@ -95,15 +94,13 @@ function generateSessionId() {
 
 // Routes
 
-// Home page
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // API: Register guest
-app.post('/api/register', (req, res) => {
+app.post('/api/register', async (req, res) => {
   const { firstName, lastName } = req.body;
-
   if (!firstName || !lastName) {
     return res.status(400).json({ error: 'Name fields are required' });
   }
@@ -111,61 +108,51 @@ app.post('/api/register', (req, res) => {
   const sessionId = generateSessionId();
   res.cookie('guestSession', sessionId, { maxAge: 24 * 60 * 60 * 1000, httpOnly: false });
 
-  db.run(
-    "INSERT INTO guests (first_name, last_name) VALUES (?, ?)",
-    [firstName, lastName],
-    function(err) {
-      if (err) {
-        return res.status(500).json({ error: 'Database error' });
-      }
-      res.json({ sessionId, guestId: this.lastID });
-    }
-  );
+  try {
+    const result = await client.query(
+      "INSERT INTO guests (first_name, last_name) VALUES ($1, $2) RETURNING id",
+      [firstName, lastName]
+    );
+    res.json({ sessionId, guestId: result.rows[0].id });
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
 });
 
-// Preferences page
 app.get('/preferences', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'preferences.html'));
 });
 
 // API: Get foods and drinks
-app.get('/api/options', (req, res) => {
-  db.all("SELECT id, name FROM foods ORDER BY id", (err, foods) => {
-    db.all("SELECT id, name FROM drinks ORDER BY id", (err, drinks) => {
-      res.json({ foods: foods || [], drinks: drinks || [] });
-    });
-  });
+app.get('/api/options', async (req, res) => {
+  try {
+    const foods = await client.query("SELECT id, name FROM foods ORDER BY id");
+    const drinks = await client.query("SELECT id, name FROM drinks ORDER BY id");
+    res.json({ foods: foods.rows, drinks: drinks.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
 });
 
 // API: Save preferences
-app.post('/api/save-preferences', (req, res) => {
+app.post('/api/save-preferences', async (req, res) => {
   const { guestId, foods, drinks, comments } = req.body;
+  if (!guestId) return res.status(400).json({ error: 'Guest ID is required' });
 
-  if (!guestId) {
-    return res.status(400).json({ error: 'Guest ID is required' });
+  try {
+    await client.query(
+      "UPDATE guests SET foods = $1, drinks = $2, comments = $3 WHERE id = $4",
+      [foods || [], drinks || [], comments || '', guestId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
   }
-
-  db.run(
-    "UPDATE guests SET foods = ?, drinks = ?, comments = ? WHERE id = ?",
-    [
-      JSON.stringify(foods || []),
-      JSON.stringify(drinks || []),
-      comments || '',
-      guestId
-    ],
-    function(err) {
-      if (err) {
-        return res.status(500).json({ error: 'Database error' });
-      }
-      res.json({ success: true });
-    }
-  );
 });
 
-// Admin login
+// Admin auth
 app.post('/api/admin/login', (req, res) => {
   const { password } = req.body;
-
   if (password === ADMIN_PASSWORD) {
     res.cookie('adminSession', 'authenticated', { 
       maxAge: 60 * 60 * 1000,
@@ -177,93 +164,89 @@ app.post('/api/admin/login', (req, res) => {
   }
 });
 
-// Admin logout
 app.post('/api/admin/logout', (req, res) => {
   res.clearCookie('adminSession');
   res.json({ success: true });
 });
 
-// Check admin auth
 app.get('/api/admin/check', (req, res) => {
   const isAdmin = req.cookies.adminSession === 'authenticated';
   res.json({ isAdmin });
 });
 
-// Admin page
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
 // API: Get all guests
-app.get('/api/admin/guests', (req, res) => {
+app.get('/api/admin/guests', async (req, res) => {
   if (req.cookies.adminSession !== 'authenticated') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  db.all("SELECT * FROM guests ORDER BY created_at DESC", (err, guests) => {
-    if (err) return res.status(500).json({ error: 'Database error' });
-
-    const parsedGuests = guests.map(g => ({
-      ...g,
-      foods: g.foods ? JSON.parse(g.foods) : [],
-      drinks: g.drinks ? JSON.parse(g.drinks) : []
-    }));
-
-    res.json(parsedGuests);
-  });
+  try {
+    const result = await client.query("SELECT * FROM guests ORDER BY created_at DESC");
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
 });
 
-// API: Add food item
-app.post('/api/admin/foods', (req, res) => {
+// API: Add food
+app.post('/api/admin/foods', async (req, res) => {
   if (req.cookies.adminSession !== 'authenticated') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-
   const { name } = req.body;
-  db.run("INSERT INTO foods (name) VALUES (?)", [name], function(err) {
-    if (err) return res.status(500).json({ error: 'Database error' });
-    res.json({ id: this.lastID, name });
-  });
+  try {
+    const result = await client.query("INSERT INTO foods (name) VALUES ($1) RETURNING id, name", [name]);
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
 });
 
-// API: Delete food item
-app.delete('/api/admin/foods/:id', (req, res) => {
+// API: Delete food
+app.delete('/api/admin/foods/:id', async (req, res) => {
   if (req.cookies.adminSession !== 'authenticated') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-
-  db.run("DELETE FROM foods WHERE id = ?", [req.params.id], (err) => {
-    if (err) return res.status(500).json({ error: 'Database error' });
+  try {
+    await client.query("DELETE FROM foods WHERE id = $1", [req.params.id]);
     res.json({ success: true });
-  });
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
 });
 
-// API: Add drink item
-app.post('/api/admin/drinks', (req, res) => {
+// API: Add drink
+app.post('/api/admin/drinks', async (req, res) => {
   if (req.cookies.adminSession !== 'authenticated') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-
   const { name } = req.body;
-  db.run("INSERT INTO drinks (name) VALUES (?)", [name], function(err) {
-    if (err) return res.status(500).json({ error: 'Database error' });
-    res.json({ id: this.lastID, name });
-  });
+  try {
+    const result = await client.query("INSERT INTO drinks (name) VALUES ($1) RETURNING id, name", [name]);
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
 });
 
-// API: Delete drink item
-app.delete('/api/admin/drinks/:id', (req, res) => {
+// API: Delete drink
+app.delete('/api/admin/drinks/:id', async (req, res) => {
   if (req.cookies.adminSession !== 'authenticated') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-
-  db.run("DELETE FROM drinks WHERE id = ?", [req.params.id], (err) => {
-    if (err) return res.status(500).json({ error: 'Database error' });
+  try {
+    await client.query("DELETE FROM drinks WHERE id = $1", [req.params.id]);
     res.json({ success: true });
-  });
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
 });
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
