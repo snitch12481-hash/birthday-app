@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Администратор</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #3a3a3a;
+            color: #f0f0f0;
+            padding: 20px;
+        }
+
+        .login-container {
+            max-width: 400px;
+            margin: 100px auto;
+            background: #2d2d2d;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .login-container h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+
+        .login-container input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #555;
+            border-radius: 8px;
+            background: #3a3a3a;
+            color: #f0f0f0;
+            font-size: 14px;
+        }
+
+        .login-container input:focus {
+            outline: none;
+            border-color: #d4a574;
+            box-shadow: 0 0 0 3px rgba(212, 165, 116, 0.1);
+        }
+
+        .login-container button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #d4a574 0%, #c99555 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .login-container button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(212, 165, 116, 0.3);
+        }
+
+        .login-error {
+            background: #5c2c2c;
+            color: #ff9999;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .admin-panel {
+            display: none;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #555;
+        }
+
+        .header h1 {
+            font-size: 32px;
+        }
+
+        .logout-btn {
+            padding: 10px 20px;
+            background: #555;
+            color: #f0f0f0;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            background: #666;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section {
+            background: #2d2d2d;
+            padding: 30px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .section h2 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #d4a574;
+        }
+
+        .section h3 {
+            font-size: 16px;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            color: #f0f0f0;
+        }
+
+        .add-item-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .add-item-form input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #555;
+            border-radius: 8px;
+            background: #3a3a3a;
+            color: #f0f0f0;
+        }
+
+        .add-item-form button {
+            padding: 10px 20px;
+            background: #d4a574;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .add-item-form button:hover {
+            background: #c99555;
+        }
+
+        .item-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .item {
+            background: #3a3a3a;
+            padding: 12px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #555;
+        }
+
+        .item button {
+            padding: 6px 12px;
+            background: #c33;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .item button:hover {
+            background: #a22;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th {
+            background: #3a3a3a;
+            padding: 12px;
+            text-align: left;
+            border: 1px solid #555;
+            color: #d4a574;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 12px;
+            border: 1px solid #555;
+        }
+
+        tr:hover {
+            background: #353535;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            background: #3a3a3a;
+            border: 1px solid #d4a574;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-right: 4px;
+            color: #d4a574;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+
+            table {
+                font-size: 12px;
+            }
+
+            th, td {
+                padding: 8px;
+            }
+
+            .item-list {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Screen -->
+    <div class="login-container" id="loginContainer">
+        <h1>🔐 Вход администратора</h1>
+        <div class="login-error" id="loginError"></div>
+        <input 
+            type="password" 
+            id="passwordInput" 
+            placeholder="Введите пароль"
+            onkeypress="if(event.key==='Enter') login()"
+        />
+        <button onclick="login()">Войти</button>
+    </div>
+
+    <!-- Admin Panel -->
+    <div class="admin-panel" id="adminPanel">
+        <div class="container">
+            <div class="header">
+                <h1>⚙️ Панель администратора</h1>
+                <button class="logout-btn" onclick="logout()">Выход</button>
+            </div>
+
+            <!-- Guests Section -->
+            <div class="section">
+                <h2>👥 Зарегистрированные гости</h2>
+                <div id="guestsTable"></div>
+            </div>
+
+            <!-- Foods Management -->
+            <div class="section">
+                <h2>🍕 Управление едой</h2>
+                <h3>Добавить блюдо</h3>
+                <div class="add-item-form">
+                    <input 
+                        type="text" 
+                        id="newFoodInput" 
+                        placeholder="Название блюда"
+                        onkeypress="if(event.key==='Enter') addFood()"
+                    />
+                    <button onclick="addFood()">Добавить</button>
+                </div>
+                <h3>Доступные блюда</h3>
+                <div class="item-list" id="foodsList"></div>
+            </div>
+
+            <!-- Drinks Management -->
+            <div class="section">
+                <h2>🥤 Управление напитками</h2>
+                <h3>Добавить напиток</h3>
+                <div class="add-item-form">
+                    <input 
+                        type="text" 
+                        id="newDrinkInput" 
+                        placeholder="Название напитка"
+                        onkeypress="if(event.key==='Enter') addDrink()"
+                    />
+                    <button onclick="addDrink()">Добавить</button>
+                </div>
+                <h3>Доступные напитки</h3>
+                <div class="item-list" id="drinksList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let foods = [];
+        let drinks = [];
+        let guests = [];
+
+        // Check admin authentication on load
+        window.addEventListener('load', checkAuth);
+
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/admin/check');
+                const data = await response.json();
+                
+                if (data.isAdmin) {
+                    showAdminPanel();
+                    loadData();
+                } else {
+                    showLoginContainer();
+                }
+            } catch (err) {
+                showLoginContainer();
+            }
+        }
+
+        async function login() {
+            const password = document.getElementById('passwordInput').value;
+            const loginError = document.getElementById('loginError');
+            loginError.style.display = 'none';
+
+            if (!password) {
+                loginError.textContent = 'Введите пароль';
+                loginError.style.display = 'block';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+
+                if (response.ok) {
+                    showAdminPanel();
+                    loadData();
+                } else {
+                    loginError.textContent = 'Неверный пароль';
+                    loginError.style.display = 'block';
+                }
+            } catch (err) {
+                loginError.textContent = 'Ошибка при входе';
+                loginError.style.display = 'block';
+            }
+        }
+
+        async function logout() {
+            await fetch('/api/admin/logout', { method: 'POST' });
+            showLoginContainer();
+        }
+
+        function showLoginContainer() {
+            document.getElementById('loginContainer').style.display = 'block';
+            document.getElementById('adminPanel').style.display = 'none';
+            document.getElementById('passwordInput').value = '';
+        }
+
+        function showAdminPanel() {
+            document.getElementById('loginContainer').style.display = 'none';
+            document.getElementById('adminPanel').style.display = 'block';
+        }
+
+        async function loadData() {
+            await loadGuests();
+            await loadFoods();
+            await loadDrinks();
+        }
+
+        async function loadGuests() {
+            try {
+                const response = await fetch('/api/admin/guests');
+                if (response.ok) {
+                    guests = await response.json();
+                    renderGuests();
+                }
+            } catch (err) {
+                console.error('Error loading guests:', err);
+            }
+        }
+
+        function renderGuests() {
+            const container = document.getElementById('guestsTable');
+            
+            if (guests.length === 0) {
+                container.innerHTML = '<div class="no-data">Нет зарегистрированных гостей</div>';
+                return;
+            }
+
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Имя</th>
+                            <th>Фамилия</th>
+                            <th>Блюда</th>
+                            <th>Напитки</th>
+                            <th>Комментарии</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            guests.forEach(guest => {
+                const foods = guest.foods.length > 0 ? guest.foods.map(f => `<span class="badge">${f}</span>`).join('') : '<span style="color: #999;">-</span>';
+                const drinks = guest.drinks.length > 0 ? guest.drinks.map(d => `<span class="badge">${d}</span>`).join('') : '<span style="color: #999;">-</span>';
+                
+                html += `
+                    <tr>
+                        <td>${guest.first_name}</td>
+                        <td>${guest.last_name}</td>
+                        <td>${foods}</td>
+                        <td>${drinks}</td>
+                        <td>${guest.comments || '-'}</td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        async function loadFoods() {
+            try {
+                const response = await fetch('/api/options');
+                const data = await response.json();
+                foods = data.foods;
+                renderFoods();
+            } catch (err) {
+                console.error('Error loading foods:', err);
+            }
+        }
+
+        function renderFoods() {
+            const container = document.getElementById('foodsList');
+            if (foods.length === 0) {
+                container.innerHTML = '<div style="color: #999; padding: 20px; text-align: center;">Нет блюд</div>';
+                return;
+            }
+
+            container.innerHTML = foods.map(food => `
+                <div class="item">
+                    <span>${food.name}</span>
+                    <button onclick="deleteFood(${food.id})">Удалить</button>
+                </div>
+            `).join('');
+        }
+
+        async function addFood() {
+            const input = document.getElementById('newFoodInput');
+            const name = input.value.trim();
+
+            if (!name) return;
+
+            try {
+                const response = await fetch('/api/admin/foods', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+
+                if (response.ok) {
+                    input.value = '';
+                    await loadFoods();
+                }
+            } catch (err) {
+                console.error('Error adding food:', err);
+            }
+        }
+
+        async function deleteFood(id) {
+            if (!confirm('Удалить это блюдо?')) return;
+
+            try {
+                const response = await fetch(`/api/admin/foods/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    await loadFoods();
+                }
+            } catch (err) {
+                console.error('Error deleting food:', err);
+            }
+        }
+
+        async function loadDrinks() {
+            try {
+                const response = await fetch('/api/options');
+                const data = await response.json();
+                drinks = data.drinks;
+                renderDrinks();
+            } catch (err) {
+                console.error('Error loading drinks:', err);
+            }
+        }
+
+        function renderDrinks() {
+            const container = document.getElementById('drinksList');
+            if (drinks.length === 0) {
+                container.innerHTML = '<div style="color: #999; padding: 20px; text-align: center;">Нет напитков</div>';
+                return;
+            }
+
+            container.innerHTML = drinks.map(drink => `
+                <div class="item">
+                    <span>${drink.name}</span>
+                    <button onclick="deleteDrink(${drink.id})">Удалить</button>
+                </div>
+            `).join('');
+        }
+
+        async function addDrink() {
+            const input = document.getElementById('newDrinkInput');
+            const name = input.value.trim();
+
+            if (!name) return;
+
+            try {
+                const response = await fetch('/api/admin/drinks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+
+                if (response.ok) {
+                    input.value = '';
+                    await loadDrinks();
+                }
+            } catch (err) {
+                console.error('Error adding drink:', err);
+            }
+        }
+
+        async function deleteDrink(id) {
+            if (!confirm('Удалить этот напиток?')) return;
+
+            try {
+                const response = await fetch(`/api/admin/drinks/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    await loadDrinks();
+                }
+            } catch (err) {
+                console.error('Error deleting drink:', err);
+            }
+        }
+    </script>
+</body>
+</html>
