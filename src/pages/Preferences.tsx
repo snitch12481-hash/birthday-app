@@ -9,7 +9,7 @@ import { Check } from "lucide-react";
 import FloatingParticles from "@/components/FloatingParticles";
 
 interface Option {
-  id: string;
+  id: number;
   name: string;
 }
 
@@ -22,35 +22,38 @@ const PreferencesPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  const foods: Option[] = [
-    { id: "1", name: "Пицца" },
-    { id: "2", name: "Суши" },
-    { id: "3", name: "Бургеры" },
-    { id: "4", name: "Салаты" },
-    { id: "5", name: "Мясные блюда" },
-    { id: "6", name: "Закуски" },
-  ];
+const [foods, setFoods] = useState<Option[]>([]);
+const [drinks, setDrinks] = useState<Option[]>([]);
 
-  const drinks: Option[] = [
-    { id: "1", name: "Вода" },
-    { id: "2", name: "Соки" },
-    { id: "3", name: "Газировка" },
-    { id: "4", name: "Чай" },
-    { id: "5", name: "Кофе" },
-    { id: "6", name: "Коктейли" },
-  ];
 
-  useEffect(() => {
-    const guestId = localStorage.getItem("guestId");
-    const name = localStorage.getItem("guestName");
-    
-    if (!guestId) {
-      navigate("/");
-      return;
-    }
-    
-    if (name) setGuestName(name);
-  }, [navigate]);
+
+
+    useEffect(() => {
+      const guestId = localStorage.getItem("guestId");
+      const name = localStorage.getItem("guestName");
+
+      if (!guestId) {
+        navigate("/");
+        return;
+      }
+
+      if (name) setGuestName(name);
+
+      (async () => {
+        try {
+          const res = await fetch("/api/options", { credentials: "include" });
+          if (!res.ok) throw new Error("Failed to load options");
+
+          const data: { foods: Option[]; drinks: Option[] } = await res.json();
+          setFoods(data.foods || []);
+          setDrinks(data.drinks || []);
+        } catch (e) {
+          console.error(e);
+          toast.error("Не удалось загрузить варианты еды/напитков");
+        }
+      })();
+    }, [navigate]);
+
 
   const toggleFood = (id: string) => {
     setSelectedFoods(prev =>
@@ -64,16 +67,60 @@ const PreferencesPage = () => {
     );
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
 
-    setTimeout(() => {
-      setIsLoading(false);
-      setIsSuccess(true);
-      toast.success("Спасибо! Ваши предпочтения сохранены");
-    }, 1500);
-  };
+  const guestId = localStorage.getItem("guestId");
+  if (!guestId) {
+    navigate("/");
+    return;
+  }
+
+  // selectedFoods/selectedDrinks сейчас хранят id (строки),
+  // мы хотим отправить НАЗВАНИЯ
+  const foodNames = selectedFoods
+    .map((id) => foods.find((f) => String(f.id) === id)?.name)
+    .filter(Boolean) as string[];
+
+  const drinkNames = selectedDrinks
+    .map((id) => drinks.find((d) => String(d.id) === id)?.name)
+    .filter(Boolean) as string[];
+
+  setIsLoading(true);
+
+  try {
+    const res = await fetch("/api/save-preferences", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        guestId: Number(guestId),
+        foods: foodNames,     // ✅ названия
+        drinks: drinkNames,   // ✅ названия
+        comments: comments.trim(),
+      }),
+    });
+
+    if (!res.ok) {
+      let msg = "Ошибка при сохранении. Попробуйте ещё раз.";
+      try {
+        const data = await res.json();
+        if (data?.error) msg = data.error;
+      } catch {}
+      toast.error(msg);
+      return;
+    }
+
+    setIsSuccess(true);
+    toast.success("Спасибо! Ваши предпочтения сохранены");
+  } catch (e) {
+    console.error(e);
+    toast.error("Ошибка сети. Попробуйте ещё раз.");
+  } finally {
+    setIsLoading(false);
+  }
+};
+
 
   if (isSuccess) {
     return (
@@ -194,8 +241,8 @@ const PreferencesPage = () => {
                     <motion.button
                       key={food.id}
                       type="button"
-                      onClick={() => toggleFood(food.id)}
-                      className={`checkbox-luxury ${selectedFoods.includes(food.id) ? 'selected' : ''}`}
+                      onClick={() => toggleFood(food.name)}
+                      className={`checkbox-luxury ${selectedFoods.includes(food.name) ? 'selected' : ''}`}
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: 0.4 + index * 0.05 }}
@@ -204,13 +251,13 @@ const PreferencesPage = () => {
                     >
                       <motion.div
                         className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all duration-300 ${
-                          selectedFoods.includes(food.id) 
+                          selectedFoods.includes(food.name) 
                             ? 'bg-primary border-primary' 
                             : 'border-muted-foreground/50'
                         }`}
-                        animate={selectedFoods.includes(food.id) ? { scale: [1, 1.2, 1] } : {}}
+                        animate={selectedFoods.includes(food.name) ? { scale: [1, 1.2, 1] } : {}}
                       >
-                        {selectedFoods.includes(food.id) && (
+                        {selectedFoods.includes(food.name) && (
                           <Check className="w-3 h-3 text-primary-foreground" />
                         )}
                       </motion.div>
@@ -235,8 +282,8 @@ const PreferencesPage = () => {
                     <motion.button
                       key={drink.id}
                       type="button"
-                      onClick={() => toggleDrink(drink.id)}
-                      className={`checkbox-luxury ${selectedDrinks.includes(drink.id) ? 'selected' : ''}`}
+                      onClick={() => toggleDrink(drink.name)}
+                      className={`checkbox-luxury ${selectedDrinks.includes(drink.name) ? 'selected' : ''}`}
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: 0.6 + index * 0.05 }}
@@ -245,13 +292,13 @@ const PreferencesPage = () => {
                     >
                       <motion.div
                         className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all duration-300 ${
-                          selectedDrinks.includes(drink.id) 
+                          selectedDrinks.includes(drink.name) 
                             ? 'bg-primary border-primary' 
                             : 'border-muted-foreground/50'
                         }`}
-                        animate={selectedDrinks.includes(drink.id) ? { scale: [1, 1.2, 1] } : {}}
+                        animate={selectedDrinks.includes(drink.name) ? { scale: [1, 1.2, 1] } : {}}
                       >
-                        {selectedDrinks.includes(drink.id) && (
+                        {selectedDrinks.includes(drink.name) && (
                           <Check className="w-3 h-3 text-primary-foreground" />
                         )}
                       </motion.div>

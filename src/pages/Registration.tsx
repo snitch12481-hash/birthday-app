@@ -23,12 +23,53 @@ const RegistrationPage = () => {
 
     setIsLoading(true);
     
-    setTimeout(() => {
-      localStorage.setItem("guestId", Date.now().toString());
-      localStorage.setItem("guestName", `${firstName} ${lastName}`);
-      toast.success("Добро пожаловать!");
-      navigate("/preferences");
-    }, 1000);
+    const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+
+      const fn = firstName.trim();
+      const ln = lastName.trim();
+
+      if (!fn || !ln) {
+        toast.error("Пожалуйста, заполните все поля");
+        return;
+      }
+
+      setIsLoading(true);
+
+      try {
+        const res = await fetch("/api/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ firstName: fn, lastName: ln }),
+        });
+
+        if (!res.ok) {
+          // попробуем вытащить текст/ошибку, но без падения
+          let msg = "Ошибка регистрации. Попробуйте ещё раз.";
+          try {
+            const data = await res.json();
+            if (data?.error) msg = data.error;
+          } catch {}
+          toast.error(msg);
+          return;
+        }
+
+        const data: { guestId: number } = await res.json();
+
+        localStorage.setItem("guestId", String(data.guestId));
+        localStorage.setItem("guestName", `${fn} ${ln}`);
+
+        toast.success("Добро пожаловать!");
+        navigate("/preferences");
+      } catch (err) {
+        console.error(err);
+        toast.error("Ошибка сети. Попробуйте ещё раз.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
   };
 
   return (

@@ -23,72 +23,173 @@ const AdminPage = () => {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   
-  const [guests, setGuests] = useState<Guest[]>([
-    { id: 1, first_name: "Александр", last_name: "Иванов", foods: ["Пицца", "Суши"], drinks: ["Вода", "Соки"], comments: "Без глютена" },
-    { id: 2, first_name: "Мария", last_name: "Петрова", foods: ["Салаты"], drinks: ["Чай"], comments: "" },
-  ]);
-  
-  const [foods, setFoods] = useState<Item[]>([
-    { id: 1, name: "Пицца" },
-    { id: 2, name: "Суши" },
-    { id: 3, name: "Бургеры" },
-    { id: 4, name: "Салаты" },
-  ]);
-  
-  const [drinks, setDrinks] = useState<Item[]>([
-    { id: 1, name: "Вода" },
-    { id: 2, name: "Соки" },
-    { id: 3, name: "Газировка" },
-    { id: 4, name: "Чай" },
-  ]);
+const [guests, setGuests] = useState<Guest[]>([]);
+const [foods, setFoods] = useState<Item[]>([]);
+const [drinks, setDrinks] = useState<Item[]>([]);
+
   
   const [newFood, setNewFood] = useState("");
+  const loadGuests = async () => {
+  const res = await fetch("/api/admin/guests", { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load guests");
+  const data = await res.json();
+  setGuests(data);
+};
+
+const loadOptions = async () => {
+  const res = await fetch("/api/options", { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load options");
+  const data = await res.json();
+  setFoods(data.foods || []);
+  setDrinks(data.drinks || []);
+};
+
+const deleteGuest = async (id: number) => {
+  const ok = window.confirm("Удалить этого гостя?");
+  if (!ok) return;
+
+  try {
+    const res = await fetch(`/api/admin/guests/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error();
+    toast.success("Гость удалён");
+    await loadGuests();
+  } catch (e) {
+    console.error(e);
+    toast.error("Не удалось удалить гостя");
+  }
+};
+
+useEffect(() => {
+  (async () => {
+    try {
+      const check = await fetch("/api/admin/check", { credentials: "include" });
+      const data = await check.json();
+
+      if (data?.isAdmin) {
+        setIsAuthenticated(true);
+        await Promise.all([loadGuests(), loadOptions()]);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  })();
+}, []);
+
   const [newDrink, setNewDrink] = useState("");
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    
-    // Demo password: "admin123"
-    setTimeout(() => {
-      if (password === "admin123") {
-        setIsAuthenticated(true);
-        toast.success("Добро пожаловать!");
-      } else {
-        toast.error("Неверный пароль");
-      }
-      setIsLoading(false);
-    }, 500);
-  };
+const handleLogin = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setIsLoading(true);
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    setPassword("");
-  };
+  try {
+    const res = await fetch("/api/admin/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ password }),
+    });
 
-  const addFood = () => {
-    if (!newFood.trim()) return;
-    setFoods([...foods, { id: Date.now(), name: newFood.trim() }]);
+    if (!res.ok) {
+      toast.error("Неверный пароль");
+      return;
+    }
+
+    setIsAuthenticated(true);
+    toast.success("Добро пожаловать!");
+    await Promise.all([loadGuests(), loadOptions()]);
+  } catch (e) {
+    console.error(e);
+    toast.error("Ошибка сети. Попробуйте ещё раз.");
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+
+const handleLogout = async () => {
+  try {
+    await fetch("/api/admin/logout", { method: "POST", credentials: "include" });
+  } catch {}
+  setIsAuthenticated(false);
+  setPassword("");
+  setGuests([]);
+};
+
+
+const addFood = async () => {
+  const name = newFood.trim();
+  if (!name) return;
+
+  try {
+    const res = await fetch("/api/admin/foods", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) throw new Error();
     setNewFood("");
     toast.success("Блюдо добавлено");
-  };
+    await loadOptions();
+  } catch {
+    toast.error("Не удалось добавить блюдо");
+  }
+};
 
-  const addDrink = () => {
-    if (!newDrink.trim()) return;
-    setDrinks([...drinks, { id: Date.now(), name: newDrink.trim() }]);
+
+const addDrink = async () => {
+  const name = newDrink.trim();
+  if (!name) return;
+
+  try {
+    const res = await fetch("/api/admin/drinks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) throw new Error();
     setNewDrink("");
     toast.success("Напиток добавлен");
-  };
+    await loadOptions();
+  } catch {
+    toast.error("Не удалось добавить напиток");
+  }
+};
 
-  const removeFood = (id: number) => {
-    setFoods(foods.filter(f => f.id !== id));
+
+const removeFood = async (id: number) => {
+  try {
+    const res = await fetch(`/api/admin/foods/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error();
     toast.success("Блюдо удалено");
-  };
+    await loadOptions();
+  } catch {
+    toast.error("Не удалось удалить блюдо");
+  }
+};
 
-  const removeDrink = (id: number) => {
-    setDrinks(drinks.filter(d => d.id !== id));
+
+const removeDrink = async (id: number) => {
+  try {
+    const res = await fetch(`/api/admin/drinks/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error();
     toast.success("Напиток удалён");
-  };
+    await loadOptions();
+  } catch {
+    toast.error("Не удалось удалить напиток");
+  }
+};
+
 
   // Login screen
   if (!isAuthenticated) {
@@ -166,6 +267,7 @@ const AdminPage = () => {
                     <th className="text-left py-3 px-4 text-primary font-medium">Блюда</th>
                     <th className="text-left py-3 px-4 text-primary font-medium">Напитки</th>
                     <th className="text-left py-3 px-4 text-primary font-medium">Комментарии</th>
+                    <th className="text-left py-3 px-4 text-primary font-medium">Действия</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -194,6 +296,16 @@ const AdminPage = () => {
                       <td className="py-4 px-4 text-muted-foreground text-sm">
                         {guest.comments || "-"}
                       </td>
+                      <td className="py-4 px-4">
+                        <button
+                          onClick={() => deleteGuest(guest.id)}
+                          className="p-2 rounded bg-destructive/10 text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                          title="Удалить гостя"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+
                     </tr>
                   ))}
                 </tbody>

@@ -1,0 +1,292 @@
+// server.js (Express + PostgreSQL + serves Vite dist)
+
+const express = require("express");
+const cookieParser = require("cookie-parser");
+const path = require("path");
+const { Client } = require("pg");
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// ====== ENV ======
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "change_me";
+const DATABASE_URL = process.env.DATABASE_URL;
+
+if (!DATABASE_URL) {
+  console.error("❌ DATABASE_URL is not set");
+}
+
+// ====== MIDDLEWARE ======
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+// ====== DB CLIENT ======
+const client = new Client({
+  connectionString: DATABASE_URL,
+  // Render Postgres обычно требует SSL в проде
+  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+});
+
+async function initDB() {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS guests (
+      id SERIAL PRIMARY KEY,
+      first_name TEXT NOT NULL,
+      last_name TEXT NOT NULL,
+      foods JSONB,
+      drinks JSONB,
+      comments TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS foods (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS drinks (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  // Defaults (если таблицы пустые)
+  const foodCount = await client.query("SELECT COUNT(*) FROM foods");
+  if (Number(foodCount.rows[0].count) === 0) {
+    const defaultFoods = ["Пицца", "Салат", "Паста", "Суши", "Блинчики", "Торт", "Фрукты"];
+    for (const name of defaultFoods) {
+      await client.query("INSERT INTO foods (name) VALUES ($1)", [name]);
+    }
+  }
+
+  const drinkCount = await client.query("SELECT COUNT(*) FROM drinks");
+  if (Number(drinkCount.rows[0].count) === 0) {
+    const defaultDrinks = ["Сок", "Вода", "Газировка", "Компот", "Чай", "Кофе", "Молоко"];
+    for (const name of defaultDrinks) {
+      await client.query("INSERT INTO drinks (name) VALUES ($1)", [name]);
+    }
+  }
+}
+
+function requireAdmin(req, res, next) {
+  if (req.cookies.adminSession !== "authenticated") {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  next();
+}
+
+// ====== ROUTES: API ======
+
+// Register guest
+app.post("/api/register", async (req, res) => {
+  const { firstName, lastName } = req.body;
+
+  if (!firstName || !lastName) {
+    return res.status(400).json({ error: "Name fields are required" });
+  }
+
+  try {
+    const result = await client.query(
+      "INSERT INTO guests (first_name, last_name) VALUES ($1, $2) RETURNING id",
+      [String(firstName).trim(), String(lastName).trim()]
+    );
+
+    // Можно не хранить гостевую cookie вообще (guestId в localStorage),
+    // но оставим как было — может пригодиться
+    res.cookie("guestSession", `guest_${Date.now()}`, {
+      maxAge: 24 * 60 * 60 * 1000,
+      httpOnly: false,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+
+    res.json({ guestId: result.rows[0].id });
+  } catch (err) {
+    console.error("Register error:", err);
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+// Get foods & drinks options
+app.get("/api/options", async (_req, res) => {
+  try {
+    const foods = await client.query("SELECT id, name FROM foods ORDER BY id");
+    const drinks = await client.query("SELECT id, name FROM drinks ORDER BY id");
+    res.json({ foods: foods.rows, drinks: drinks.rows });
+  } catch (err) {
+    console.error("Options error:", err);
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+// Save preferences
+app.post("/api/save-preferences", async (req, res) => {
+  const { guestId, foods, drinks, comments } = req.body;
+
+  if (!guestId) {
+    return res.status(400).json({ error: "Guest ID is required" });
+  }
+
+  // Мы ожидаем массивы строк (названия). Но на всякий случай нормализуем.
+  const foodsArr = Array.isArray(foods) ? foods.map(String) : [];
+  const drinksArr = Array.isArray(drinks) ? drinks.map(String) : [];
+  const commentsStr = comments ? String(comments) : "";
+
+  try {
+    await client.query(
+      "UPDATE guests SET foods = $1::jsonb, drinks = $2::jsonb, comments = $3 WHERE id = $4",
+      [JSON.stringify(foodsArr), JSON.stringify(drinksArr), commentsStr, Number(guestId)]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Save preferences error:", err);
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+// ====== Admin auth ======
+app.post("/api/admin/login", (req, res) => {
+  const { password } = req.body;
+
+  if (password === ADMIN_PASSWORD) {
+    res.cookie("adminSession", "authenticated", {
+      maxAge: 60 * 60 * 1000,
+      httpOnly: false,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+    return res.json({ success: true });
+  }
+
+  res.status(401).json({ error: "Invalid password" });
+});
+
+app.post("/api/admin/logout", (_req, res) => {
+  res.clearCookie("adminSession");
+  res.json({ success: true });
+});
+
+app.get("/api/admin/check", (req, res) => {
+  res.json({ isAdmin: req.cookies.adminSession === "authenticated" });
+});
+
+// ====== Admin data ======
+
+// Get all guests
+app.get("/api/admin/guests", requireAdmin, async (_req, res) => {
+  try {
+    const result = await client.query("SELECT * FROM guests ORDER BY created_at DESC");
+
+    // Приводим foods/drinks к массивам, чтобы админка не падала
+    const guests = result.rows.map((g) => ({
+      ...g,
+      foods: Array.isArray(g.foods) ? g.foods : [],
+      drinks: Array.isArray(g.drinks) ? g.drinks : [],
+    }));
+
+    res.json(guests);
+  } catch (err) {
+    console.error("Admin guests error:", err);
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+// Delete guest (удаление пользователя)
+app.delete("/api/admin/guests/:id", requireAdmin, async (req, res) => {
+  try {
+    await client.query("DELETE FROM guests WHERE id = $1", [Number(req.params.id)]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Delete guest error:", err);
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+// Add food
+app.post("/api/admin/foods", requireAdmin, async (req, res) => {
+  const name = (req.body?.name || "").toString().trim();
+  if (!name) return res.status(400).json({ error: "Name is required" });
+
+  try {
+    const result = await client.query(
+      "INSERT INTO foods (name) VALUES ($1) RETURNING id, name",
+      [name]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("Add food error:", err);
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+// Delete food
+app.delete("/api/admin/foods/:id", requireAdmin, async (req, res) => {
+  try {
+    await client.query("DELETE FROM foods WHERE id = $1", [Number(req.params.id)]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Delete food error:", err);
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+// Add drink
+app.post("/api/admin/drinks", requireAdmin, async (req, res) => {
+  const name = (req.body?.name || "").toString().trim();
+  if (!name) return res.status(400).json({ error: "Name is required" });
+
+  try {
+    const result = await client.query(
+      "INSERT INTO drinks (name) VALUES ($1) RETURNING id, name",
+      [name]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("Add drink error:", err);
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+// Delete drink
+app.delete("/api/admin/drinks/:id", requireAdmin, async (req, res) => {
+  try {
+    await client.query("DELETE FROM drinks WHERE id = $1", [Number(req.params.id)]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Delete drink error:", err);
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+// ====== Serve Vite build ======
+const distPath = path.join(__dirname, "dist");
+app.use(express.static(distPath));
+
+// SPA fallback (ВАЖНО: после всех /api роутов)
+app.get("*", (_req, res) => {
+  res.sendFile(path.join(distPath, "index.html"));
+});
+
+// ====== START ======
+(async () => {
+  try {
+    await client.connect();
+    console.log("✅ Connected to PostgreSQL");
+    await initDB();
+    console.log("✅ DB initialized");
+
+    app.listen(PORT, () => {
+      console.log(`✅ Server running on port ${PORT}`);
+    });
+  } catch (err) {
+    console.error("❌ Startup error:", err);
+    process.exit(1);
+  }
+})();
