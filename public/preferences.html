@@ -291,27 +291,39 @@
                 const foodsContainer = document.getElementById('foodsContainer');
                 foodsContainer.innerHTML = '';
                 foods.forEach(food => {
-                    const wrapper = document.createElement('div');
-                    wrapper.className = 'checkbox-wrapper';
-                    wrapper.innerHTML = `
-                        <input type="checkbox" id="food-${food.id}" value="${food.id}" name="foods">
-                        <label for="food-${food.id}">${food.name}</label>
-                    `;
-                    foodsContainer.appendChild(wrapper);
+                const wrapper = document.createElement('div');
+                wrapper.className = 'checkbox-wrapper';
+                wrapper.innerHTML = `
+                    <input 
+                    type="checkbox"
+                    id="food-${food.id}"
+                    data-name="${food.name}"
+                    name="foods"
+                    >
+                    <label for="food-${food.id}">${food.name}</label>
+                `;
+                foodsContainer.appendChild(wrapper);
                 });
+
 
                 // Render drinks
                 const drinksContainer = document.getElementById('drinksContainer');
                 drinksContainer.innerHTML = '';
                 drinks.forEach(drink => {
-                    const wrapper = document.createElement('div');
-                    wrapper.className = 'checkbox-wrapper';
-                    wrapper.innerHTML = `
-                        <input type="checkbox" id="drink-${drink.id}" value="${drink.id}" name="drinks">
-                        <label for="drink-${drink.id}">${drink.name}</label>
-                    `;
-                    drinksContainer.appendChild(wrapper);
+                const wrapper = document.createElement('div');
+                wrapper.className = 'checkbox-wrapper';
+                wrapper.innerHTML = `
+                    <input 
+                    type="checkbox"
+                    id="drink-${drink.id}"
+                    data-name="${drink.name}"
+                    name="drinks"
+                    >
+                    <label for="drink-${drink.id}">${drink.name}</label>
+                `;
+                drinksContainer.appendChild(wrapper);
                 });
+
             } catch (err) {
                 console.error('Error loading options:', err);
             }
@@ -322,12 +334,14 @@
             e.preventDefault();
 
             const foods = Array.from(
-                document.querySelectorAll('input[name="foods"]:checked')
-            ).map(el => el.value);
+            document.querySelectorAll('input[name="foods"]:checked')
+            ).map(el => el.dataset.name);
+
 
             const drinks = Array.from(
-                document.querySelectorAll('input[name="drinks"]:checked')
-            ).map(el => el.value);
+            document.querySelectorAll('input[name="drinks"]:checked')
+            ).map(el => el.dataset.name);
+
 
             const comments = document.getElementById('comments').value.trim();
 

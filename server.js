@@ -198,6 +198,20 @@ app.get('/api/admin/guests', async (req, res) => {
     res.status(500).json({ error: 'Database error' });
   }
 });
+app.delete('/api/admin/guests/:id', async (req, res) => {
+  if (req.cookies.adminSession !== 'authenticated') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    await client.query('DELETE FROM guests WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete guest error:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 
 // API: Add food
 app.post('/api/admin/foods', async (req, res) => {
