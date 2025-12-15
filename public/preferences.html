@@ -349,9 +349,18 @@
 
                 if (!response.ok) throw new Error('Failed to save preferences');
 
-                // Show success state
-                document.getElementById('preferencesForm').style.display = 'none';
-                document.getElementById('successContainer').style.display = 'block';
+// Show success state
+document.getElementById('errorMsg').style.display = 'none';
+
+// Спрятать поля/опции
+document.getElementById('foodsSection').style.display = 'none';
+document.getElementById('drinksSection').style.display = 'none';
+document.querySelector('.form-group').style.display = 'none';
+document.getElementById('formButtons').style.display = 'none';
+
+// Показать "спасибо"
+document.getElementById('successContainer').style.display = 'block';
+
             } catch (err) {
                 const errorMsg = document.getElementById('errorMsg');
                 errorMsg.textContent = 'Ошибка при сохранении. Попробуйте ещё раз.';

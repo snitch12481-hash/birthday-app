@@ -433,8 +433,12 @@
             `;
 
             guests.forEach(guest => {
-                const foods = guest.foods.length > 0 ? guest.foods.map(f => `<span class="badge">${f}</span>`).join('') : '<span style="color: #999;">-</span>';
-                const drinks = guest.drinks.length > 0 ? guest.drinks.map(d => `<span class="badge">${d}</span>`).join('') : '<span style="color: #999;">-</span>';
+const foodsArr = Array.isArray(guest.foods) ? guest.foods : [];
+const drinksArr = Array.isArray(guest.drinks) ? guest.drinks : [];
+
+const foods = foodsArr.length > 0 ? foodsArr.map(f => `<span class="badge">${f}</span>`).join('') : '<span style="color: #999;">-</span>';
+const drinks = drinksArr.length > 0 ? drinksArr.map(d => `<span class="badge">${d}</span>`).join('') : '<span style="color: #999;">-</span>';
+
                 
                 html += `
                     <tr>
