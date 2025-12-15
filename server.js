@@ -6,7 +6,8 @@ const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const ADMIN_PASSWORD = 'birthday2024';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'birthday2024';
+
 
 // Middleware
 app.use(express.json());
@@ -140,10 +141,16 @@ app.post('/api/save-preferences', async (req, res) => {
   if (!guestId) return res.status(400).json({ error: 'Guest ID is required' });
 
   try {
-    await client.query(
-      "UPDATE guests SET foods = $1, drinks = $2, comments = $3 WHERE id = $4",
-      [foods || [], drinks || [], comments || '', guestId]
-    );
+await client.query(
+  "UPDATE guests SET foods = $1::jsonb, drinks = $2::jsonb, comments = $3 WHERE id = $4",
+  [
+    JSON.stringify(foods || []),
+    JSON.stringify(drinks || []),
+    comments || '',
+    guestId
+  ]
+);
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Database error' });
