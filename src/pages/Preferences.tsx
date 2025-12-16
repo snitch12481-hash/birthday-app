@@ -16,117 +16,109 @@ interface Option {
 const PreferencesPage = () => {
   const navigate = useNavigate();
   const [guestName, setGuestName] = useState("");
+  // ✅ Храним ID (строки), а не name
   const [selectedFoods, setSelectedFoods] = useState<string[]>([]);
   const [selectedDrinks, setSelectedDrinks] = useState<string[]>([]);
   const [comments, setComments] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-const [foods, setFoods] = useState<Option[]>([]);
-const [drinks, setDrinks] = useState<Option[]>([]);
+  const [foods, setFoods] = useState<Option[]>([]);
+  const [drinks, setDrinks] = useState<Option[]>([]);
 
+  useEffect(() => {
+    const guestId = localStorage.getItem("guestId");
+    const name = localStorage.getItem("guestName");
 
-
-
-    useEffect(() => {
-      const guestId = localStorage.getItem("guestId");
-      const name = localStorage.getItem("guestName");
-
-      if (!guestId) {
-        navigate("/");
-        return;
-      }
-
-      if (name) setGuestName(name);
-
-      (async () => {
-        try {
-          const res = await fetch("/api/options", { credentials: "include" });
-          if (!res.ok) throw new Error("Failed to load options");
-
-          const data: { foods: Option[]; drinks: Option[] } = await res.json();
-          setFoods(data.foods || []);
-          setDrinks(data.drinks || []);
-        } catch (e) {
-          console.error(e);
-          toast.error("Не удалось загрузить варианты еды/напитков");
-        }
-      })();
-    }, [navigate]);
-
-
-  const toggleFood = (id: string) => {
-    setSelectedFoods(prev =>
-      prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]
-    );
-  };
-
-  const toggleDrink = (id: string) => {
-    setSelectedDrinks(prev =>
-      prev.includes(id) ? prev.filter(d => d !== id) : [...prev, id]
-    );
-  };
-
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-
-  const guestId = localStorage.getItem("guestId");
-  if (!guestId) {
-    navigate("/");
-    return;
-  }
-
-  // selectedFoods/selectedDrinks сейчас хранят id (строки),
-  // мы хотим отправить НАЗВАНИЯ
-  const foodNames = selectedFoods
-    .map((id) => foods.find((f) => String(f.id) === id)?.name)
-    .filter(Boolean) as string[];
-
-  const drinkNames = selectedDrinks
-    .map((id) => drinks.find((d) => String(d.id) === id)?.name)
-    .filter(Boolean) as string[];
-
-  setIsLoading(true);
-
-  try {
-    const res = await fetch("/api/save-preferences", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        guestId: Number(guestId),
-        foods: foodNames,     // ✅ названия
-        drinks: drinkNames,   // ✅ названия
-        comments: comments.trim(),
-      }),
-    });
-
-    if (!res.ok) {
-      let msg = "Ошибка при сохранении. Попробуйте ещё раз.";
-      try {
-        const data = await res.json();
-        if (data?.error) msg = data.error;
-      } catch {}
-      toast.error(msg);
+    if (!guestId) {
+      navigate("/");
       return;
     }
 
-    setIsSuccess(true);
-    toast.success("Спасибо! Ваши предпочтения сохранены");
-  } catch (e) {
-    console.error(e);
-    toast.error("Ошибка сети. Попробуйте ещё раз.");
-  } finally {
-    setIsLoading(false);
-  }
-};
+    if (name) setGuestName(name);
 
+    (async () => {
+      try {
+        const res = await fetch("/api/options", { credentials: "include" });
+        if (!res.ok) throw new Error("Failed to load options");
+
+        const data: { foods: Option[]; drinks: Option[] } = await res.json();
+        setFoods(data.foods || []);
+        setDrinks(data.drinks || []);
+      } catch (e) {
+        console.error(e);
+        toast.error("Не удалось загрузить варианты еды/напитков");
+      }
+    })();
+  }, [navigate]);
+
+  const toggleFood = (id: string) => {
+    setSelectedFoods((prev) => (prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]));
+  };
+
+  const toggleDrink = (id: string) => {
+    setSelectedDrinks((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id]));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const guestId = localStorage.getItem("guestId");
+    if (!guestId) {
+      navigate("/");
+      return;
+    }
+
+    // ✅ selectedFoods/selectedDrinks хранят id (строки),
+    // отправляем НАЗВАНИЯ
+    const foodNames = selectedFoods
+      .map((id) => foods.find((f) => String(f.id) === id)?.name)
+      .filter(Boolean) as string[];
+
+    const drinkNames = selectedDrinks
+      .map((id) => drinks.find((d) => String(d.id) === id)?.name)
+      .filter(Boolean) as string[];
+
+    setIsLoading(true);
+
+    try {
+      const res = await fetch("/api/save-preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          guestId: Number(guestId),
+          foods: foodNames,
+          drinks: drinkNames,
+          comments: comments.trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        let msg = "Ошибка при сохранении. Попробуйте ещё раз.";
+        try {
+          const data = await res.json();
+          if (data?.error) msg = data.error;
+        } catch {}
+        toast.error(msg);
+        return;
+      }
+
+      setIsSuccess(true);
+      toast.success("Спасибо! Ваши предпочтения сохранены");
+    } catch (e) {
+      console.error(e);
+      toast.error("Ошибка сети. Попробуйте ещё раз.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (isSuccess) {
     return (
       <div className="min-h-screen bg-background relative overflow-hidden">
         <FloatingParticles />
-        
+
         <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
           <motion.div
             className="glass-card p-10 max-w-md text-center"
@@ -176,7 +168,7 @@ const handleSubmit = async (e: React.FormEvent) => {
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
       <FloatingParticles />
-      
+
       {/* Animated gradient orbs */}
       <motion.div
         className="fixed top-1/4 right-1/4 w-[400px] h-[400px] bg-primary/10 rounded-full blur-[80px]"
@@ -237,33 +229,34 @@ const handleSubmit = async (e: React.FormEvent) => {
                   <span>Еда</span>
                 </h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {foods.map((food, index) => (
-                    <motion.button
-                      key={food.id}
-                      type="button"
-                      onClick={() => toggleFood(food.name)}
-                      className={`checkbox-luxury ${selectedFoods.includes(food.name) ? 'selected' : ''}`}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: 0.4 + index * 0.05 }}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <motion.div
-                        className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all duration-300 ${
-                          selectedFoods.includes(food.name) 
-                            ? 'bg-primary border-primary' 
-                            : 'border-muted-foreground/50'
-                        }`}
-                        animate={selectedFoods.includes(food.name) ? { scale: [1, 1.2, 1] } : {}}
+                  {foods.map((food, index) => {
+                    const idStr = String(food.id);
+                    const selected = selectedFoods.includes(idStr);
+
+                    return (
+                      <motion.button
+                        key={food.id}
+                        type="button"
+                        onClick={() => toggleFood(idStr)}
+                        className={`checkbox-luxury ${selected ? "selected" : ""}`}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.4 + index * 0.05 }}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
                       >
-                        {selectedFoods.includes(food.name) && (
-                          <Check className="w-3 h-3 text-primary-foreground" />
-                        )}
-                      </motion.div>
-                      <span className="text-sm">{food.name}</span>
-                    </motion.button>
-                  ))}
+                        <motion.div
+                          className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all duration-300 ${
+                            selected ? "bg-primary border-primary" : "border-muted-foreground/50"
+                          }`}
+                          animate={selected ? { scale: [1, 1.2, 1] } : {}}
+                        >
+                          {selected && <Check className="w-3 h-3 text-primary-foreground" />}
+                        </motion.div>
+                        <span className="text-sm">{food.name}</span>
+                      </motion.button>
+                    );
+                  })}
                 </div>
               </motion.div>
 
@@ -278,33 +271,34 @@ const handleSubmit = async (e: React.FormEvent) => {
                   <span>Напитки</span>
                 </h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {drinks.map((drink, index) => (
-                    <motion.button
-                      key={drink.id}
-                      type="button"
-                      onClick={() => toggleDrink(drink.name)}
-                      className={`checkbox-luxury ${selectedDrinks.includes(drink.name) ? 'selected' : ''}`}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: 0.6 + index * 0.05 }}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <motion.div
-                        className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all duration-300 ${
-                          selectedDrinks.includes(drink.name) 
-                            ? 'bg-primary border-primary' 
-                            : 'border-muted-foreground/50'
-                        }`}
-                        animate={selectedDrinks.includes(drink.name) ? { scale: [1, 1.2, 1] } : {}}
+                  {drinks.map((drink, index) => {
+                    const idStr = String(drink.id);
+                    const selected = selectedDrinks.includes(idStr);
+
+                    return (
+                      <motion.button
+                        key={drink.id}
+                        type="button"
+                        onClick={() => toggleDrink(idStr)}
+                        className={`checkbox-luxury ${selected ? "selected" : ""}`}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.6 + index * 0.05 }}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
                       >
-                        {selectedDrinks.includes(drink.name) && (
-                          <Check className="w-3 h-3 text-primary-foreground" />
-                        )}
-                      </motion.div>
-                      <span className="text-sm">{drink.name}</span>
-                    </motion.button>
-                  ))}
+                        <motion.div
+                          className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all duration-300 ${
+                            selected ? "bg-primary border-primary" : "border-muted-foreground/50"
+                          }`}
+                          animate={selected ? { scale: [1, 1.2, 1] } : {}}
+                        >
+                          {selected && <Check className="w-3 h-3 text-primary-foreground" />}
+                        </motion.div>
+                        <span className="text-sm">{drink.name}</span>
+                      </motion.button>
+                    );
+                  })}
                 </div>
               </motion.div>
 
@@ -331,12 +325,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.9 }}
               >
-                <Button
-                  type="submit"
-                  className="w-full"
-                  size="lg"
-                  disabled={isLoading}
-                >
+                <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
                   {isLoading ? (
                     <span className="flex items-center gap-2">
                       <motion.span

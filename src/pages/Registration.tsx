@@ -13,16 +13,6 @@ const RegistrationPage = () => {
   const [lastName, setLastName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!firstName.trim() || !lastName.trim()) {
-      toast.error("Пожалуйста, заполните все поля");
-      return;
-    }
-
-    setIsLoading(true);
-    
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
 
@@ -45,7 +35,6 @@ const RegistrationPage = () => {
         });
 
         if (!res.ok) {
-          // попробуем вытащить текст/ошибку, но без падения
           let msg = "Ошибка регистрации. Попробуйте ещё раз.";
           try {
             const data = await res.json();
@@ -56,11 +45,8 @@ const RegistrationPage = () => {
         }
 
         const data: { guestId: number } = await res.json();
-
         localStorage.setItem("guestId", String(data.guestId));
         localStorage.setItem("guestName", `${fn} ${ln}`);
-
-        toast.success("Добро пожаловать!");
         navigate("/preferences");
       } catch (err) {
         console.error(err);
@@ -70,7 +56,6 @@ const RegistrationPage = () => {
       }
     };
 
-  };
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
